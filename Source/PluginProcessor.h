@@ -61,6 +61,9 @@ public:
 private:
     //==============================================================================
     juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
+    juce::LinearSmoothedValue<float> gainValue { 0.0f };
+    juce::LinearSmoothedValue<float> mixValue { 0.0f };
+    juce::LinearSmoothedValue<float> outputValue { 0.0f };
     
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (SimpleFuzzAudioProcessor)
 };

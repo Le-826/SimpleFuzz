@@ -32,12 +32,12 @@ juce::AudioProcessorValueTreeState::ParameterLayout SimpleFuzzAudioProcessor::cr
 {
     std::vector<std::unique_ptr<juce::RangedAudioParameter>> params;
 
-    auto pGain = std::make_unique<juce::AudioParameterFloat>("gain", "Gain", 0.0f, 1.0f, 0.0f);
-    auto pMix = std::make_unique<juce::AudioParameterFloat>("mix", "Mix", 0.0f, 1.0f, 0.0f);
-    auto pVolume = std::make_unique<juce::AudioParameterFloat>("volume", "Volume", 0.0f, 0.1f, 0.1f);
+    auto pGain = std::make_unique<juce::AudioParameterFloat>(juce::ParameterID{"GAIN", 1}, "Gain", 0.0f, 1.0f, 0.0f);
+    auto pMix = std::make_unique<juce::AudioParameterFloat>(juce::ParameterID{"MIX", 1}, "Mix", 0.0f, 1.0f, 0.0f);
+    auto pOutput = std::make_unique<juce::AudioParameterFloat>(juce::ParameterID{"OUTPUT", 1}, "Output", 0.0f, 0.1f, 0.1f);
     params.push_back(std::move(pGain));
     params.push_back(std::move(pMix));
-    params.push_back(std::move(pVolume));
+    params.push_back(std::move(pOutput));
     return { params.begin(), params.end () };
 }
 //==============================================================================
@@ -107,6 +107,10 @@ void SimpleFuzzAudioProcessor::prepareToPlay (double sampleRate, int samplesPerB
 {
     // Use this method as the place to do any pre-playback
     // initialisation that you need..
+    
+    gainValue.reset(sampleRate, 0.0001);
+    mixValue.reset(sampleRate, 0.0001);
+    outputValue.reset(sampleRate, 0.0001);
 }
 
 void SimpleFuzzAudioProcessor::releaseResources()
@@ -163,9 +167,20 @@ void SimpleFuzzAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
     // Alternatively, you can process the samples with the channels
     // interleaved by keeping the same state.
     
-    float gain = *treeState.getRawParameterValue("gain") * 60;
-    float mix = *treeState.getRawParameterValue("mix");
-    float volume = *treeState.getRawParameterValue("volume");
+    float g = treeState.getRawParameterValue("GAIN")->load();
+    gainValue.setTargetValue(g);
+    float m = treeState.getRawParameterValue("MIX")->load();
+    mixValue.setTargetValue(m);
+    float o = treeState.getRawParameterValue("OUTPUT")->load();
+    outputValue.setTargetValue(o);
+    
+    // Get the current values of the smoothed parameters
+    float gain = gainValue.getNextValue() * 60;
+    DBG(gain);
+    float mix = mixValue.getNextValue();
+    DBG(mix);
+    float output = outputValue.getNextValue();
+    DBG(output);
     
     //Audio block object
     juce::dsp::AudioBlock<float> block(buffer);
@@ -177,14 +192,16 @@ void SimpleFuzzAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
 
         for (int sample = 0; sample < block.getNumSamples(); ++sample)
         {
+            
+            
             float drySample = channelData[sample];
             float wetSignal = drySample * juce::Decibels::decibelsToGain(gain);
-            if (wetSignal > 0.99) {
-                wetSignal *= 0.99 / std::abs(wetSignal);
+            if (wetSignal > 0.99f) {
+                wetSignal *= 0.99f / std::abs(wetSignal);
             }
             
             channelData[sample] = (drySample * (1.0f - mix)) + (wetSignal * mix);
-            channelData[sample] *= volume;
+            channelData[sample] *= output;
         }
     }
 }
